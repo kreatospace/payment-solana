@@ -1,0 +1,66 @@
+# Rust
+/target
+**/target
+Cargo.lock
+
+# Anchor
+.anchor
+test-ledger
+.localnet
+dist
+
+# Solana
+*.so
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!Anchor.toml
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build artifacts
+coverage
+.cache
+.tmp
+temp
+
+# AVM / Anchor Version Manager
+.avm
+
+# Generated IDLs & Types (optional)
+target/idl
+target/types
+
+# Rust analyzer
+rust-project.json
+
+# Windows
+*.pdb
+
+# Solana keypairs
+target/deploy/*-keypair.json
+
+# Optional: keep deploy keypair tracked
+#!target/deploy/kreato_payment-keypair.json

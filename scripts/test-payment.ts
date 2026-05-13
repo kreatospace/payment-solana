@@ -10,8 +10,8 @@ async function main() {
   const program = new anchor.Program(idl as anchor.Idl, provider) as any;
 
   // Gunakan wallet kamu sebagai payer sekaligus creator (untuk test)
-  const payer    = provider.wallet.publicKey;
-  const creator  = new PublicKey("EyzXxbyovJAtFVejBr5LaoKKGn3LfG4fevSsNiL6j47Z"); // wallet kamu
+  const payer = provider.wallet.publicKey;
+  const creator = new PublicKey("EyzXxbyovJAtFVejBr5LaoKKGn3LfG4fevSsNiL6j47Z"); // wallet kamu
   const platform = new PublicKey("9zKzHCriRQ7feH55cr3p7vm4F5MQotLJZizpLxC7suAL"); // sama untuk test
 
   // Product ID — bytes32 dari string
@@ -52,8 +52,8 @@ async function main() {
     .payWithSol(
       new anchor.BN(amount),
       productId,
-      1, // DONATION
-      { some: new anchor.BN(0) } // fee_override = 0% gratis
+      1,
+      new anchor.BN(0)  // fee_override = 0% gratis
     )
     .accounts({
       config: configPda,

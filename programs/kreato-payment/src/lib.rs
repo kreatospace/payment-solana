@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount};
 
-declare_id!("3nrgACPmXUvzcEdAXzHYemJY7XTCvnLx5qEfE7BKC5We"); // replace after anchor build
+declare_id!("HxRqJfjEiioo6QDmVKKUAyCx5p1gLARRxoYdKYsG9RFt"); // replace after anchor build
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -15,7 +15,7 @@ const CONFIG_SEED: &[u8] = b"kreato_config";
 
 // ── Program ───────────────────────────────────────────────────────────────────
 
-// #[program]
+#[program]
 pub mod kreato_payment {
     use super::*;
 

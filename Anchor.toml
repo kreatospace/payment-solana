@@ -9,10 +9,13 @@ skip-lint = false
 kreato_payment = "3nrgACPmXUvzcEdAXzHYemJY7XTCvnLx5qEfE7BKC5We"
 
 [programs.localnet]
-kreato_payment = "CG8C55MSnkwjLMZ2mJ3hKSn4nsLT4yB6KNdrfcKGdhix"
+kreato_payment = "3nrgACPmXUvzcEdAXzHYemJY7XTCvnLx5qEfE7BKC5We"
 
 [programs.mainnet]
-kreato_payment = "CG8C55MSnkwjLMZ2mJ3hKSn4nsLT4yB6KNdrfcKGdhix"
+kreato_payment = "HxRqJfjEiioo6QDmVKKUAyCx5p1gLARRxoYdKYsG9RFt"
+
+[registry]
+url = "https://api.apr.dev"
 
 [provider]
 cluster = "devnet"
@@ -23,5 +26,3 @@ members = ["programs/kreato-payment"]
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
-
-[hooks]

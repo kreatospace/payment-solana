@@ -25,4 +25,3 @@ idl-build = [
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
 anchor-spl = { workspace = true }
-solana-program = { workspace = true }

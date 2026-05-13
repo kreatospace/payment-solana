@@ -9,11 +9,7 @@ async function main() {
   const program = anchor.workspace.KreatoPayment as Program;
 
   // Ganti dengan wallet platform fee kamu
-<<<<<<< HEAD
-  const platformWallet = new PublicKey("PLATFORM_WALLET_ADDRESS_HERE");
-=======
   const platformWallet = new PublicKey("7zn89WxqYetYeDF2NzEt9Lev2sYgGrjchaZ1EcGEA6BQ");
->>>>>>> 646f92f (update declareid lib.rs)
 
   console.log("Initializing program...");
   console.log("Authority:", provider.wallet.publicKey.toString());
@@ -28,8 +24,4 @@ async function main() {
   console.log("Explorer:", `https://explorer.solana.com/tx/${tx}?cluster=devnet`);
 }
 
-<<<<<<< HEAD
 main().catch(console.error);
-=======
-main().catch(console.error);
->>>>>>> 646f92f (update declareid lib.rs)

@@ -2,13 +2,15 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount};
 
-declare_id!("HxRqJfjEiioo6QDmVKKUAyCx5p1gLARRxoYdKYsG9RFt"); // replace after anchor build
+declare_id!("HxRqJfjEiioo6QDmVKKUAyCx5p1gLARRxoYdKYsG9RFt");
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// Platform fee in basis points — 250 = 2.5%
-const FEE_BPS: u64 = 250;
+/// Default platform fee in basis points — 250 = 2.5%
+const DEFAULT_FEE_BPS: u64 = 250;
 const BPS_DENOMINATOR: u64 = 10_000;
+/// Max fee cap — 10%
+const MAX_FEE_BPS: u64 = 1_000;
 
 /// Seeds for the platform config PDA
 const CONFIG_SEED: &[u8] = b"kreato_config";
@@ -22,12 +24,11 @@ pub mod kreato_payment {
     // ── Admin: initialize config ──────────────────────────────────────────────
 
     /// Called once after deployment to set the platform wallet.
-    /// Only the upgrade authority (deployer) can call this.
     pub fn initialize(ctx: Context<Initialize>, platform_wallet: Pubkey) -> Result<()> {
         let config = &mut ctx.accounts.config;
         config.authority = ctx.accounts.authority.key();
         config.platform = platform_wallet;
-        config.fee_bps = FEE_BPS;
+        config.fee_bps = DEFAULT_FEE_BPS;
         config.bump = ctx.bumps.config;
         msg!("KreatoPayment initialized. Platform: {}", platform_wallet);
         Ok(())
@@ -44,27 +45,32 @@ pub mod kreato_payment {
         Ok(())
     }
 
-    /// Update the fee (authority only, capped at 10%).
+    /// Update the default fee (authority only, capped at 10%).
     pub fn set_fee(ctx: Context<SetFee>, new_fee_bps: u64) -> Result<()> {
-        require!(new_fee_bps <= 1_000, KreatoError::FeeTooHigh); // max 10%
+        require!(new_fee_bps <= MAX_FEE_BPS, KreatoError::FeeTooHigh);
         ctx.accounts.config.fee_bps = new_fee_bps;
-        msg!("Fee updated to {} bps", new_fee_bps);
+        msg!("Default fee updated to {} bps", new_fee_bps);
         Ok(())
     }
 
     // ── Pay with native SOL ───────────────────────────────────────────────────
 
-    /// Transfer SOL, split between creator (97.5%) and platform (2.5%).
+    /// Transfer SOL, split between creator and platform.
     ///
     /// Arguments:
-    ///   amount      – lamports to send in total
-    ///   product_id  – off-chain reference (bytes32 / [u8; 32])
+    ///   amount       – lamports to send in total
+    ///   product_id   – off-chain reference ([u8; 32])
     ///   payment_type – 0=PURCHASE, 1=DONATION, 2=SUBSCRIPTION
+    ///   fee_override – optional fee in bps (None = use config default)
+    ///                  pass Some(0) for free (0% fee)
+    ///                  pass Some(250) for 2.5%
+    ///                  capped at MAX_FEE_BPS (10%)
     pub fn pay_with_sol(
         ctx: Context<PayWithSol>,
         amount: u64,
         product_id: [u8; 32],
         payment_type: u8,
+        fee_override: Option<u64>,
     ) -> Result<()> {
         require!(amount > 0, KreatoError::ZeroAmount);
         require!(
@@ -72,7 +78,9 @@ pub mod kreato_payment {
             KreatoError::CreatorIsPlatform
         );
 
-        let fee_bps = ctx.accounts.config.fee_bps;
+        // Resolve fee: use override if provided, else fall back to config
+        let fee_bps = resolve_fee(fee_override, ctx.accounts.config.fee_bps)?;
+
         let platform_fee = amount
             .checked_mul(fee_bps)
             .unwrap()
@@ -92,50 +100,60 @@ pub mod kreato_payment {
             creator_amount,
         )?;
 
-        // Transfer fee to platform
-        anchor_lang::system_program::transfer(
-            CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::Transfer {
-                    from: ctx.accounts.payer.to_account_info(),
-                    to: ctx.accounts.platform.to_account_info(),
-                },
-            ),
-            platform_fee,
-        )?;
+        // Transfer fee to platform (skip if fee is 0)
+        if platform_fee > 0 {
+            anchor_lang::system_program::transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    anchor_lang::system_program::Transfer {
+                        from: ctx.accounts.payer.to_account_info(),
+                        to: ctx.accounts.platform.to_account_info(),
+                    },
+                ),
+                platform_fee,
+            )?;
+        }
 
         emit!(PaymentProcessed {
             payer: ctx.accounts.payer.key(),
             creator: ctx.accounts.creator.key(),
-            token_mint: Pubkey::default(), // native SOL = zero pubkey
+            token_mint: Pubkey::default(),
             total_amount: amount,
             creator_amount,
             platform_fee,
+            fee_bps_used: fee_bps,
             product_id,
             payment_type,
         });
+
+        msg!(
+            "SOL payment: {} lamports, creator gets {}, platform gets {} (fee: {} bps)",
+            amount,
+            creator_amount,
+            platform_fee,
+            fee_bps
+        );
 
         Ok(())
     }
 
     // ── Pay with SPL token (USDC, USDT, etc.) ─────────────────────────────────
 
-    /// Transfer an SPL token (e.g. USDC), split between creator and platform.
-    ///
-    /// The payer must have already approved (or this is a direct transfer from
-    /// their ATA). We use transfer_checked for safety.
+    /// Transfer an SPL token, split between creator and platform.
     ///
     /// Arguments:
-    ///   amount       – token amount in the token's smallest unit (e.g. 1_000_000 = 1 USDC)
-    ///   decimals     – token decimals (passed explicitly for transfer_checked)
+    ///   amount       – token amount in smallest unit (e.g. 1_000_000 = 1 USDC)
+    ///   decimals     – token decimals (for transfer_checked safety)
     ///   product_id   – off-chain reference
     ///   payment_type – 0=PURCHASE, 1=DONATION, 2=SUBSCRIPTION
+    ///   fee_override – optional fee in bps (None = use config default)
     pub fn pay_with_token(
         ctx: Context<PayWithToken>,
         amount: u64,
         decimals: u8,
         product_id: [u8; 32],
         payment_type: u8,
+        fee_override: Option<u64>,
     ) -> Result<()> {
         require!(amount > 0, KreatoError::ZeroAmount);
         require!(
@@ -147,7 +165,9 @@ pub mod kreato_payment {
             KreatoError::CreatorIsPlatform
         );
 
-        let fee_bps = ctx.accounts.config.fee_bps;
+        // Resolve fee: use override if provided, else fall back to config
+        let fee_bps = resolve_fee(fee_override, ctx.accounts.config.fee_bps)?;
+
         let platform_fee = amount
             .checked_mul(fee_bps)
             .unwrap()
@@ -170,20 +190,22 @@ pub mod kreato_payment {
             decimals,
         )?;
 
-        // Transfer platform_fee → platform ATA
-        token::transfer_checked(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                token::TransferChecked {
-                    from: ctx.accounts.payer_ata.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    to: ctx.accounts.platform_ata.to_account_info(),
-                    authority: ctx.accounts.payer.to_account_info(),
-                },
-            ),
-            platform_fee,
-            decimals,
-        )?;
+        // Transfer platform_fee → platform ATA (skip if fee is 0)
+        if platform_fee > 0 {
+            token::transfer_checked(
+                CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    token::TransferChecked {
+                        from: ctx.accounts.payer_ata.to_account_info(),
+                        mint: ctx.accounts.mint.to_account_info(),
+                        to: ctx.accounts.platform_ata.to_account_info(),
+                        authority: ctx.accounts.payer.to_account_info(),
+                    },
+                ),
+                platform_fee,
+                decimals,
+            )?;
+        }
 
         emit!(PaymentProcessed {
             payer: ctx.accounts.payer.key(),
@@ -192,27 +214,49 @@ pub mod kreato_payment {
             total_amount: amount,
             creator_amount,
             platform_fee,
+            fee_bps_used: fee_bps,
             product_id,
             payment_type,
         });
+
+        msg!(
+            "Token payment: {} units, creator gets {}, platform gets {} (fee: {} bps)",
+            amount,
+            creator_amount,
+            platform_fee,
+            fee_bps
+        );
 
         Ok(())
     }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Resolve the effective fee:
+/// - If fee_override is Some(x), use x (capped at MAX_FEE_BPS)
+/// - If fee_override is None, use config_fee_bps (the on-chain default)
+fn resolve_fee(fee_override: Option<u64>, config_fee_bps: u64) -> Result<u64> {
+    match fee_override {
+        Some(bps) => {
+            require!(bps <= MAX_FEE_BPS, KreatoError::FeeTooHigh);
+            Ok(bps)
+        }
+        None => Ok(config_fee_bps),
+    }
+}
+
 // ── Account structs ───────────────────────────────────────────────────────────
 
-/// Global config PDA — stores platform wallet + fee
 #[account]
 pub struct PlatformConfig {
     pub authority: Pubkey, // upgrade authority (deployer)
     pub platform: Pubkey,  // platform fee recipient wallet
-    pub fee_bps: u64,      // fee in basis points (250 = 2.5%)
+    pub fee_bps: u64,      // default fee in basis points (250 = 2.5%)
     pub bump: u8,
 }
 
 impl PlatformConfig {
-    // 8 discriminator + 32 + 32 + 8 + 1
     pub const LEN: usize = 8 + 32 + 32 + 8 + 1;
 }
 
@@ -270,7 +314,7 @@ pub struct PayWithSol<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// CHECK: creator is just a SOL recipient, validated by business logic not ownership
+    /// CHECK: creator is just a SOL recipient
     #[account(
         mut,
         constraint = creator.key() != config.platform @ KreatoError::CreatorIsPlatform
@@ -312,7 +356,6 @@ pub struct PayWithToken<'info> {
 
     pub mint: Account<'info, Mint>,
 
-    /// Payer's token account (source)
     #[account(
         mut,
         associated_token::mint      = mint,
@@ -320,7 +363,6 @@ pub struct PayWithToken<'info> {
     )]
     pub payer_ata: Account<'info, TokenAccount>,
 
-    /// Creator's token account (destination) — init if needed
     #[account(
         init_if_needed,
         payer                       = payer,
@@ -329,7 +371,6 @@ pub struct PayWithToken<'info> {
     )]
     pub creator_ata: Account<'info, TokenAccount>,
 
-    /// Platform's token account (destination) — init if needed
     #[account(
         init_if_needed,
         payer                       = payer,
@@ -349,12 +390,13 @@ pub struct PayWithToken<'info> {
 pub struct PaymentProcessed {
     pub payer: Pubkey,
     pub creator: Pubkey,
-    pub token_mint: Pubkey, // Pubkey::default() for native SOL
+    pub token_mint: Pubkey,
     pub total_amount: u64,
     pub creator_amount: u64,
     pub platform_fee: u64,
-    pub product_id: [u8; 32], // keccak256 / sha256 of off-chain product id
-    pub payment_type: u8,     // 0=PURCHASE 1=DONATION 2=SUBSCRIPTION
+    pub fee_bps_used: u64, // actual fee bps used (override or default)
+    pub product_id: [u8; 32],
+    pub payment_type: u8,
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────────

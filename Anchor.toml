@@ -6,13 +6,13 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-kreato_payment = "ETiDTG8zHnyGLu4mRTBMtMDGbh1xucRccFsZPkw3L4Wm"
+kreato_payment = "ASNxrqJSuKpmAvADJqMnY5uh9HmDnGdhtzWLyZjnaUE9"
 
 [programs.localnet]
-kreato_payment = "ETiDTG8zHnyGLu4mRTBMtMDGbh1xucRccFsZPkw3L4Wm"
+kreato_payment = "ASNxrqJSuKpmAvADJqMnY5uh9HmDnGdhtzWLyZjnaUE9"
 
 [programs.mainnet]
-kreato_payment = "ETiDTG8zHnyGLu4mRTBMtMDGbh1xucRccFsZPkw3L4Wm"
+kreato_payment = "ASNxrqJSuKpmAvADJqMnY5uh9HmDnGdhtzWLyZjnaUE9"
 
 [registry]
 url = "https://api.apr.dev"

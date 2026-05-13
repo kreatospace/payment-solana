@@ -1,27 +1,39 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
+import idl from "../target/idl/kreato_payment.json";
 
 async function main() {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.KreatoPayment as Program;
+  const programId = new PublicKey(idl.address);
+  const program = new anchor.Program(idl as anchor.Idl, provider) as any;
 
-  // Ganti dengan wallet platform fee kamu
-  const platformWallet = new PublicKey("7zn89WxqYetYeDF2NzEt9Lev2sYgGrjchaZ1EcGEA6BQ");
+  console.log("Program ID :", programId.toString());
+  console.log("Authority  :", provider.wallet.publicKey.toString());
 
-  console.log("Initializing program...");
-  console.log("Authority:", provider.wallet.publicKey.toString());
-  console.log("Platform:", platformWallet.toString());
+  const platformWallet = provider.wallet.publicKey;
 
   const tx = await program.methods
     .initialize(platformWallet)
+    .accounts({
+      authority: provider.wallet.publicKey,
+    })
     .rpc();
 
-  console.log("✅ Initialize success!");
-  console.log("Transaction:", tx);
+  console.log("\n✅ Initialize success!");
+  console.log("Tx      :", tx);
   console.log("Explorer:", `https://explorer.solana.com/tx/${tx}?cluster=devnet`);
+
+  const [configPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("kreato_config")],
+    programId
+  );
+  const config = await program.account.platformConfig.fetch(configPda);
+  console.log("\nPDA     :", configPda.toString());
+  console.log("fee_bps :", config.feeBps.toString());
+  console.log("platform:", config.platform.toString());
 }
 
 main().catch(console.error);

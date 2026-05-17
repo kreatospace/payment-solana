@@ -10,9 +10,7 @@
     "initialize": "ts-node scripts/initialize.ts"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.31.1",
-    "@solana/spl-token": "^0.4.6",
-    "@solana/web3.js": "^1.95.3"
+    "@coral-xyz/anchor": "^0.31.1"
   },
   "devDependencies": {
     "@types/chai": "^4.3.12",

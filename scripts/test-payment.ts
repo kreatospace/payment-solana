@@ -9,10 +9,9 @@ async function main() {
   const programId = new PublicKey(idl.address);
   const program = new anchor.Program(idl as anchor.Idl, provider) as any;
 
-  // Gunakan wallet kamu sebagai payer sekaligus creator (untuk test)
   const payer = provider.wallet.publicKey;
-  const creator = new PublicKey("EyzXxbyovJAtFVejBr5LaoKKGn3LfG4fevSsNiL6j47Z"); // wallet kamu
-  const platform = new PublicKey("9zKzHCriRQ7feH55cr3p7vm4F5MQotLJZizpLxC7suAL"); // sama untuk test
+  const creator = new PublicKey("EyzXxbyovJAtFVejBr5LaoKKGn3LfG4fevSsNiL6j47Z");
+  const platform = new PublicKey("9zKzHCriRQ7feH55cr3p7vm4F5MQotLJZizpLxC7suAL");
 
   // Product ID — bytes32 dari string
   const productId = Array.from(Buffer.alloc(32, 0));
@@ -33,7 +32,7 @@ async function main() {
       new anchor.BN(amount),
       productId,
       0, // PURCHASE
-      null // fee_override = null → pakai default 2.5%
+      null
     )
     .accounts({
       config: configPda,
@@ -47,13 +46,12 @@ async function main() {
   console.log("Tx      :", tx);
   console.log("Explorer:", `https://explorer.solana.com/tx/${tx}?cluster=devnet`);
 
-  // Test 2: fee override 0% (gratis)
   const tx2 = await program.methods
     .payWithSol(
       new anchor.BN(amount),
       productId,
       1,
-      new anchor.BN(0)  // fee_override = 0% gratis
+      new anchor.BN(0)
     )
     .accounts({
       config: configPda,

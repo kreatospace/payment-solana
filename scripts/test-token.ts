@@ -14,7 +14,6 @@ async function main() {
     const creator = new PublicKey("EyzXxbyovJAtFVejBr5LaoKKGn3LfG4fevSsNiL6j47Z");
     const platform = new PublicKey("9zKzHCriRQ7feH55cr3p7vm4F5MQotLJZizpLxC7suAL");
 
-    // Ganti dengan TOKEN_ADDRESS dari Step 1
     const mint = new PublicKey("9oYe4wPnBDEAgwZTMWatoH4itkAVG85Q8ark56WFz8S3");
 
     const [configPda] = PublicKey.findProgramAddressSync(
@@ -66,7 +65,7 @@ async function main() {
             decimals,
             productId,
             1, // DONATION
-            new anchor.BN(0) // gratis
+            new anchor.BN(0) // free
         )
         .accounts({
             config: configPda,
